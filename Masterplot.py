@@ -102,7 +102,6 @@ class DataInput:
             plt.title(title)
 
         if per90:
-            p90statement += ' per90'
             p = sns.scatterplot(x=on_x, y=on_y,
                                 data=df, size=3, hue='Pos', legend=False)
             for line in range(df.shape[0]):
