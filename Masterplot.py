@@ -7,14 +7,16 @@ import matplotlib.pyplot as plt
 class DataInput:
     def __init__(self, filepath_data):
         self.data = pd.read_csv(filepath_data, index_col='Rk')
-        self.filtereddf = self.data
-        self.filtereddf['Player'] = self.filtereddf['Player'].apply(lambda x: ' '.join(x.split('\\')[1].split('-')))
-        self.filtereddf['Comp'] = self.filtereddf['Comp'].apply(lambda x: ' '.join(x.split()[1:]))
+        self.data['Player'] = self.data['Player'].apply(lambda x: ' '.join(x.split('\\')[1].split('-')))
+        self.data['Comp'] = self.data['Comp'].apply(lambda x: ' '.join(x.split()[1:]))
+        self.data['Nation'] = self.data['Nation'].apply(lambda x: x.split()[1])
+        self.filtereddf = self.data.copy()
 
     def showdata(self, no=5):
         print(self.filtereddf.head(no))
 
-    def filterdata(self, min_90s: object = 5, *pos_to_remove, team: object = False, league: object = False):
+    def filterdata(self, min_90s = 5, *pos_to_remove, team: object = False,
+                   league: object = False, nation: object = False):
         notpos = []
         for pos in pos_to_remove:
             notpos.append(pos)
@@ -24,9 +26,14 @@ class DataInput:
             self.filtereddf = self.filtereddf[self.filtereddf['Squad'] == team]
         if league:
             self.filtereddf = self.filtereddf[self.filtereddf['Comp'] == league]
+        if nation:
+            self.filtereddf = self.filtereddf[self.filtereddf['Nation'] == nation]
 
     def show_different_positions(self):
         return list(self.data['Pos'].unique())
+
+    def show_different_nations(self):
+        return list(self.data['Nation'].unique())
 
     def show_relevant_columns(self, all=False):
         if all:
