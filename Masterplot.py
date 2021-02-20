@@ -14,7 +14,7 @@ class DataInput:
         self.data['Nation'] = self.data['Nation'].apply(lambda x: x.split()[1])
         self.filtereddf = self.data.copy()
 
-    # The below method shows the head of the data after a filtering option. We can control the number of
+    # The below method shows the head of the data after a filtering operation. We can control the number of
     # data rows by changing the no option
 
     def showdata(self, no=5):
