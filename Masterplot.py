@@ -2,6 +2,8 @@ import os
 import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
+import numpy as np
+from adjustText.adjustText import adjust_text
 
 
 # Here we develop an OOPs oriented format in which we have various methods to play with the csv file
@@ -14,7 +16,7 @@ class DataInput:
         self.data['Nation'] = self.data['Nation'].apply(lambda x: x.split()[1])
         self.filtereddf = self.data.copy()
 
-    # The below method shows the head of the data after a filtering operation. We can control the number of
+    # The below method shows the head of the data after a filtering option. We can control the number of
     # data rows by changing the no option
 
     def showdata(self, no=5):
@@ -56,14 +58,12 @@ class DataInput:
         if all_cols:
             return list(self.data.columns)
 
-        col = list(self.data.columns)
-        while True:
-            if col[0] == '90s':
-                col.remove('90s')
-                break
-            col.pop(0)
-
-        return col
+        columns = list(self.data.columns)
+        col_to_remove = ['Player', 'Nation', 'Pos', 'Squad', 'Comp', 'Age', 'Born', '90s']
+        for col in col_to_remove:
+            if col in columns:
+                columns.remove(col)
+        return columns
 
     # This properly lists all the names of the leagues in the original dataset
     @property
@@ -97,8 +97,12 @@ class DataInput:
     # save saves the plot in a directory of your choice
     # change_hue changes the hue of the plot, it is by default based on Position
     # show_legend shows the legend on the plot
+    # add_xref, add_yred and add_refline adds reference lines according to slope needed
+    # repel creates a ggrepel type feature which repels each label
+    # Above code taken from https://github.com/Phlya/adjustText
     def plot(self, on_x, on_y, per90=False, no_of_players=False, season='20-21', plot_on_page=True,
-             custom_headers=False, size=(12, 8), save=False, change_hue='Pos', show_legend=False):
+             custom_headers=False, size=(12, 8), save=False, change_hue='Pos', show_legend=False, add_xref=False,
+             add_yref=False, add_refline=False, repel=True):
 
         df = self.filtereddf.copy().reset_index(drop=True)
         if on_x[-2:] == '90' or on_y[-2:] == 90:
@@ -120,11 +124,21 @@ class DataInput:
         league = ''
         nation = ''
         team = ''
-        if (int(df['Comp'].nunique()) > 1) and (int(df['Squad'].nunique()) > 1) and (int(df['Nation'].nunique()) > 1):
-            title = '{0} vs {1} top {2} players across Europe\'s top 5 leagues for {3}{4}'.format(on_x, on_y,
-                                                                                                  str(no_of_players),
-                                                                                                  str(season),
-                                                                                                  p90statement)
+        if (int(df['Comp'].nunique()) > 1) and (int(df['Squad'].nunique()) > 1):
+            title = '{0} vs {1} top {2} players across Europe\'s top 5 leagues\n for {3}{4}'.format(on_x, on_y,
+                                                                                                    str(no_of_players),
+                                                                                                    str(season),
+                                                                                                    p90statement)
+            if int(df['Nation'].nunique()) == 1:
+                nation += df['Nation'].iloc[0] + ' nationality'
+                title = '{0} vs {1} top {2} players across Europe\'s top 5 leagues of {3} \n for {4}{5}'.format(on_x,
+                                                                                                                on_y,
+                                                                                                                str(
+                                                                                                                    no_of_players),
+                                                                                                                nation,
+                                                                                                                str(
+                                                                                                                    season),
+                                                                                                                p90statement)
         else:
             if int(df['Comp'].nunique()) == 1:
                 league += df['Comp'].iloc[0]
@@ -143,8 +157,8 @@ class DataInput:
             else:
                 title_st = ' and of '.join(title_lst)
 
-            title = '{0} vs {1} top {2} players in {3} for {4}{5}'.format(on_x, on_y, str(no_of_players), title_st,
-                                                                          str(season), p90statement)
+            title = '{0} vs {1} top {2} players in {3}\n for {4}{5}'.format(on_x, on_y, str(no_of_players), title_st,
+                                                                            season, p90statement)
         x_axis = on_x + p90statement
         y_axis = on_y + p90statement
 
@@ -154,28 +168,46 @@ class DataInput:
             y_axis = input('Y axis title: ')
 
         plt.figure(figsize=size)
+        plt.style.use('ggplot')
 
         dist = (df[on_x].max() - df[on_x].min()) / 100
+        size = [8 if per90 else 10][0]
 
-        if not per90:
-            p = sns.scatterplot(x=on_x, y=on_y, hue=change_hue,
-                                data=df, legend=show_legend)
+        p = sns.scatterplot(x=on_x, y=on_y, hue=change_hue,
+                            data=df, legend=show_legend)
+        if not repel:
             for line in range(df.shape[0]):
                 plt.text(df[on_x][line] + dist, df[on_y][line],
-                         df['Player'][line],
-                         fontdict=dict(color='black', size=10))
-            p.set(xlabel=x_axis, ylabel=y_axis)
-            plt.title(title)
+                        df['Player'][line],
+                        fontdict=dict(color='black', size=size))
+        else:
+            texts = []
+            for x,y,s in zip(np.array(df[on_x]), df[on_y], df['Player']):
+                texts.append(plt.text(x, y, s,
+                                      fontdict=dict(color='black', size=size)))
+            adjust_text(texts, force_points=0.2, force_text=0.2,
+                        expand_points=(1, 1), expand_text=(1, 1),
+                        arrowprops=dict(arrowstyle="-", color='white', lw=0.5))
+        p.set(xlabel=x_axis, ylabel=y_axis)
+        plt.title(title)
 
-        if per90:
-            p = sns.scatterplot(x=on_x, y=on_y, data=df,
-                                hue=change_hue, legend=show_legend)
-            for line in range(df.shape[0]):
-                plt.text(df[on_x][line] + dist, df[on_y][line],
-                         df['Player'][line],
-                         fontdict=dict(color='black', size=8))
-            p.set(xlabel=x_axis, ylabel=y_axis)
-            plt.title(title)
+        if add_xref:
+            p.axvline(add_xref, ls='--')
+
+        if add_yref:
+            p.axhline(add_yref, ls='--')
+
+        if add_refline:
+            slope, intercept = add_refline
+
+            def abline(slope, intercept):
+                """Plot a line from slope and intercept"""
+                axes = plt.gca()
+                x_vals = np.array(axes.get_xlim())
+                y_vals = intercept + slope * x_vals
+                plt.plot(x_vals, y_vals, '--')
+
+            abline(slope, intercept)
 
         if save:
             file_path = input('Choose filepath you want to save in or click enter if in same directory: ')
@@ -184,13 +216,18 @@ class DataInput:
             if len(file_path.split()) == 0:
                 file_path = os.getcwd()
 
+            if input('Do you want to save the image in an uncreated sub directory:').lower()[0] == 'y':
+                sub_dir = input('Name of the sub directory: ')
+                os.mkdir(file_path+'\\'+sub_dir)
+                file_path = file_path+'\\'+sub_dir
+
+
             try:
                 plt.savefig(file_path + '\\' + filename + '.png')
             except:
                 print('An error occurred in saving the plot')
             else:
                 print(f'File was saved succesfully at {file_path} with name {filename}')
-
         if plot_on_page:
             plt.show()
 
