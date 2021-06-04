@@ -1,19 +1,26 @@
 import os
-import pandas as pd
-import seaborn as sns
+
 import matplotlib.pyplot as plt
 import numpy as np
+import pandas as pd
+import requests
+import seaborn as sns
+from sklearn.preprocessing import MinMaxScaler
+
 from adjustText.adjustText import adjust_text
 
 
-# Here we develop an OOPs oriented format in which we have various methods to play with the csv file
+# Here we develop an OOPs oriented format in which we have various methods to operate on the csv file
 
 class DataInput:
     def __init__(self, filepath_data):
         self.data = pd.read_csv(filepath_data, index_col='Rk')
-        self.data['Player'] = self.data['Player'].apply(lambda x: ' '.join(x.split('\\')[1].split('-')))
-        self.data['Comp'] = self.data['Comp'].apply(lambda x: ' '.join(x.split()[1:]))
-        self.data['Nation'] = self.data['Nation'].apply(lambda x: x.split()[1])
+        try:
+            self.data['Player'] = self.data['Player'].apply(lambda x: ' '.join(x.split('\\')[1].split('-')))
+            self.data['Comp'] = self.data['Comp'].apply(lambda x: ' '.join(x.split()[1:]))
+            self.data['Nation'] = self.data['Nation'].apply(lambda x: x.split()[-1])
+        except:
+            print('Error in loading file:' + filepath_data)
         self.filtereddf = self.data.copy()
 
     # The below method shows the head of the data after a filtering option. We can control the number of
@@ -80,7 +87,7 @@ class DataInput:
     # save the csv in the same directory as this Python script)
     def save_new_csv(self, filename='new_csv', filepath=os.getcwd()):
         try:
-            self.filtereddf.to_csv(filepath + '\\' + filename + '.csv')
+            self.filtereddf.to_csv(filepath + '\\' + filename + '.csv', encoding='utf-8-sig')
         except:
             print('An error occurred in saving the file')
         else:
@@ -101,7 +108,7 @@ class DataInput:
     # repel creates a ggrepel type feature which repels each label
     # Above code taken from https://github.com/Phlya/adjustText
     def plot(self, on_x, on_y, per90=False, no_of_players=False, season='20-21', plot_on_page=True,
-             custom_headers=False, size=(12, 8), save=False, change_hue='Pos', show_legend=False, add_xref=False,
+             custom_headers=False, figure_size=(12, 8), save=False, change_hue='Pos', show_legend=False, add_xref=False,
              add_yref=False, add_refline=False, repel=True):
 
         df = self.filtereddf.copy().reset_index(drop=True)
@@ -113,9 +120,13 @@ class DataInput:
             df[on_y] = df[on_y] / df['90s']
 
         if no_of_players:
-            number = no_of_players
-            df['Custom'] = df[on_x] * df[on_y]
-            df = df.sort_values('Custom', ascending=False)[:number].reset_index(drop=True)
+            scaled = MinMaxScaler().fit_transform(df[[on_x, on_y]])
+            df_scaled = []
+            for i in range(scaled.shape[0]):
+                df_scaled.append(np.prod(scaled[i]))
+            df['Custom'] = pd.Series(df_scaled)
+            # df['Custom'] = df[on_x] * df[on_y]
+            df = df.sort_values('Custom', ascending=False)[:no_of_players].reset_index(drop=True)
 
         p90statement: str = ''
         if per90:
@@ -167,22 +178,23 @@ class DataInput:
             x_axis = input('X axis title: ')
             y_axis = input('Y axis title: ')
 
-        plt.figure(figsize=size)
+        plt.figure(figsize=figure_size)
         plt.style.use('ggplot')
 
         dist = (df[on_x].max() - df[on_x].min()) / 100
         size = [8 if per90 else 10][0]
 
-        p = sns.scatterplot(x=on_x, y=on_y, hue=change_hue,
-                            data=df, legend=show_legend)
+        p = sns.scatterplot(x=on_x, y=y_axis, data=df,
+                            hue=change_hue, legend=show_legend)
+
         if not repel:
             for line in range(df.shape[0]):
                 plt.text(df[on_x][line] + dist, df[on_y][line],
-                        df['Player'][line],
-                        fontdict=dict(color='black', size=size))
+                         df['Player'][line],
+                         fontdict=dict(color='black', size=size))
         else:
             texts = []
-            for x,y,s in zip(np.array(df[on_x]), df[on_y], df['Player']):
+            for x, y, s in zip(np.array(df[on_x]), df[on_y], df['Player']):
                 texts.append(plt.text(x, y, s,
                                       fontdict=dict(color='black', size=size)))
             adjust_text(texts, force_points=0.2, force_text=0.2,
@@ -218,12 +230,11 @@ class DataInput:
 
             if input('Do you want to save the image in an uncreated sub directory:').lower()[0] == 'y':
                 sub_dir = input('Name of the sub directory: ')
-                os.mkdir(file_path+'\\'+sub_dir)
-                file_path = file_path+'\\'+sub_dir
-
+                os.mkdir(file_path + '\\' + sub_dir)
+                file_path = file_path + '\\' + sub_dir
 
             try:
-                plt.savefig(file_path + '\\' + filename + '.png')
+                plt.savefig(file_path + '\\' + filename + '.png', dpi=300)
             except:
                 print('An error occurred in saving the plot')
             else:
@@ -235,25 +246,88 @@ class DataInput:
 # Many a times we want to create a plot from two different csv files, the below class helps us do so
 # TwoDataInput takes 2 csvs as input and merges them, all the methods remain similar to the previous class
 
+# A preliminary function which combines both dfs and cleans the dataframe
+def combine_and_cleancolumns(d1, d2):
+    data = pd.merge(d1, d2, on='Player')
+    try:
+        data['Player'] = data['Player'].apply(lambda x: ' '.join(x.split('\\')[1].split('-')))
+        data['Comp'] = data['Comp'].apply(lambda x: ' '.join(x.split()[1:]))
+        data['Nation'] = data['Nation'].apply(lambda x: x.split()[-1])
+    except:
+        print('Error in loading file at ' + d1 + ' and ' + d2)
+    finally:
+        return data
+
+
 class TwoDataInput(DataInput):
     def __init__(self, filepath_data1, filepath_data2):
         super().__init__(filepath_data1)
         super().__init__(filepath_data2)
         self.d1 = pd.read_csv(filepath_data1, index_col='Rk')
         self.d2 = pd.read_csv(filepath_data2, index_col='Rk')
-        self.data = pd.merge(self.d1, self.d2, on='Player')
-        col = list(self.data.columns)
-        new_col = []
-        for i in col:
-            name = i
-            if i[-2:] == '_x' or i[-2:] == '_y':
-                name = i[:-2]
-            if name in new_col:
-                self.data = self.data.drop(i, axis=1)
-            else:
-                new_col.append(name)
-        self.data.columns = new_col
-        self.data['Player'] = self.data['Player'].apply(lambda x: ' '.join(x.split('\\')[1].split('-')))
-        self.data['Comp'] = self.data['Comp'].apply(lambda x: ' '.join(x.split()[1:]))
-        self.data['Nation'] = self.data['Nation'].apply(lambda x: x.split()[1])
+        self.data = combine_and_cleancolumns(self.d1, self.d2)
         self.filtereddf = self.data.copy()
+
+
+# A function which can read data from a Fbref webpage
+def readfromhtml(filepath):
+    df = pd.read_html(filepath)[0]
+    column_lst = list(df.columns)
+    for index in range(len(column_lst)):
+        column_lst[index] = column_lst[index][1]
+
+    df.columns = column_lst
+    df.drop(df[df['Player'] == 'Player'].index, inplace=True)
+    df = df.fillna('0')
+    df.set_index('Rk', drop=True, inplace=True)
+    try:
+        df['Comp'] = df['Comp'].apply(lambda x: ' '.join(x.split()[1:]))
+        df['Nation'] = df['Nation'].astype(str)
+        df['Nation'] = df['Nation'].apply(lambda x: x.split()[-1])
+    except:
+        print('Error in uploading file:' + filepath)
+    finally:
+        df = df.apply(pd.to_numeric, errors='ignore')
+        return df
+
+
+# Similar to the data input, this particular class takes information directly from
+# Fbref's website based on url
+class DataInputFromWebpage(DataInput):
+    def __init__(self, filepath_data):
+        self.data = readfromhtml(filepath_data)
+        self.filtereddf = self.data.copy()
+
+
+# This is the two class extension extended to both files from Fbref's website
+class TwoDataInputFromWebpage(DataInput):
+    def __init__(self, filepath_data1, filepath_data2):
+        self.d1 = readfromhtml(filepath_data1)
+        self.d2 = readfromhtml(filepath_data2)
+        self.data = pd.merge(self.d1, self.d2)
+        self.filtereddf = self.data.copy()
+
+
+from bs4 import BeautifulSoup as soup
+
+# If you want all data for the big 5 leagues, you just need to run this function with
+# the filepath where you want to save all the files
+def save_all_csvs(filepath=os.getcwd()):
+    base_url = 'https://fbref.com/en/comps/Big5/Big-5-European-Leagues-Stats'
+    req = requests.get(base_url)
+    parse_soup = soup(req.content, 'lxml')
+    scripts = parse_soup.find_all('ul')
+    url_list = scripts[4]
+    urls = []
+    for url in url_list.find_all('a', href=True):
+        urls.append(url['href'])
+    urls = [base_url[:17] + url for url in urls]
+    for url in urls:
+        df = readfromhtml(url)
+        filename = url.split('/')[6]
+        try:
+            df.to_csv(filepath + '\\' + filename + '.csv', encoding='utf-8-sig')
+        except:
+            print('An error occurred in saving the file')
+        else:
+            print('File has been saved as {0} at {1}'.format(filename, filepath))
