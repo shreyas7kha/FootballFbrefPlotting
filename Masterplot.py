@@ -6,6 +6,11 @@ import pandas as pd
 import requests
 import seaborn as sns
 from sklearn.preprocessing import MinMaxScaler
+import matplotlib as mpl
+
+mpl.rcParams['font.family'] = 'Candara'
+mpl.rcParams['font.weight'] = 'bold'
+mpl.rcParams['font.size'] = 12
 
 from adjustText.adjustText import adjust_text
 
@@ -21,6 +26,7 @@ class DataInput:
             self.data['Nation'] = self.data['Nation'].apply(lambda x: x.split()[-1])
         except:
             print('Error in loading file:' + filepath_data)
+        
         self.filtereddf = self.data.copy()
 
     # The below method shows the head of the data after a filtering option. We can control the number of
@@ -51,35 +57,39 @@ class DataInput:
     # To find positions in filtered dataset make the filtered_dataset param = True
     def show_different_positions(self, filtered_dataset=False):
         if filtered_dataset:
-            return self.filtereddf['Pos'].unique()
-        return self.data['Pos'].unique()
+            print(self.filtereddf['Pos'].unique())
+        print(self.data['Pos'].unique())
 
     # This method shows us the different nations which can be found in the original or filtered dataset
     def show_different_nations(self, filtered_dataset=False):
         if filtered_dataset:
-            return self.filtereddf['Pos'].unique()
-        return self.data['Nation'].unique()
+            print(self.filtereddf['Pos'].unique())
+        print(self.data['Pos'].unique())
 
     # This method shows all the the columns or only the stats columns in the original dataset
     def show_relevant_columns(self, all_cols=False):
         if all_cols:
-            return list(self.data.columns)
+            print(list(self.data.columns))
 
         columns = list(self.data.columns)
         col_to_remove = ['Player', 'Nation', 'Pos', 'Squad', 'Comp', 'Age', 'Born', '90s']
         for col in col_to_remove:
             if col in columns:
                 columns.remove(col)
-        return columns
+        print(columns)
 
     # This properly lists all the names of the leagues in the original dataset
     @property
     def show_leaguenames(self):
-        return self.data['Comp'].unique()
+        print(self.data['Comp'].unique())
 
     # This methods shows all the teams present in a particular league
     def show_teams_in_league(self, leaguename):
-        return self.data[self.data['Comp'] == leaguename]['Squad'].unique()
+        print(self.data[self.data['Comp'] == leaguename]['Squad'].unique())
+
+    # This methods shows all the players present in a particular team
+    def show_players_in_team(self, teamname):
+        print(self.data[self.data['Squad'] == teamname][['Player','90s','Pos']].reset_index(drop=True))
 
     # This method saves the filtered df as a csv file on your system
     # The first parameters saves the file in that name(don't add the .csv)
@@ -102,54 +112,54 @@ class DataInput:
     # custom_headers lets you make custom labels for x, y axes and title
     # size is the figure size(input as a tuple, first refers to x width, second to y width)
     # save saves the plot in a directory of your choice
-    # change_hue changes the hue of the plot, it is by default based on Position
-    # show_legend shows the legend on the plot
     # add_xref, add_yred and add_refline adds reference lines according to slope needed
     # repel creates a ggrepel type feature which repels each label
     # Above code taken from https://github.com/Phlya/adjustText
     def plot(self, on_x, on_y, per90=False, no_of_players=False, season='20-21', plot_on_page=True,
-             custom_headers=False, figure_size=(12, 8), save=False, change_hue='Pos', show_legend=False, add_xref=False,
+             custom_headers=False, figure_size=(12, 8), point_col='red', text_col='black',
+             annotate = True, player_focus = None,
+             bgcolor='white', save=False, add_xref=False,
              add_yref=False, add_refline=False, repel=True):
 
         df = self.filtereddf.copy().reset_index(drop=True)
-        if on_x[-2:] == '90' or on_y[-2:] == 90:
-            per90 = False
-
-        if per90:
-            df[on_x] = df[on_x] / df['90s']
-            df[on_y] = df[on_y] / df['90s']
-
-        if no_of_players:
-            scaled = MinMaxScaler().fit_transform(df[[on_x, on_y]])
-            df_scaled = []
-            for i in range(scaled.shape[0]):
-                df_scaled.append(np.prod(scaled[i]))
-            df['Custom'] = pd.Series(df_scaled)
-            # df['Custom'] = df[on_x] * df[on_y]
-            df = df.sort_values('Custom', ascending=False)[:no_of_players].reset_index(drop=True)
+        x_axis, y_axis = on_x, on_y
 
         p90statement: str = ''
+
         if per90:
             p90statement += ' per 90'
+            if (on_x[-1] != '%') and (on_x[-2:] != '90'):
+                df[on_x] = df[on_x] / df['90s']
+                x_axis += p90statement
+            if (on_y[-1] != '%') and (on_y[-2:] != '90'):
+                df[on_y] = df[on_y] / df['90s']
+                y_axis += p90statement
+
+        if annotate or not player_focus:
+            if no_of_players:
+                scaled = MinMaxScaler().fit_transform(df[[on_x, on_y]])
+                df_scaled = []
+                for i in range(scaled.shape[0]):
+                    df_scaled.append(np.prod(scaled[i]))
+                df['Custom'] = pd.Series(df_scaled)
+                # df['Custom'] = df[on_x] * df[on_y]
+                df = df.sort_values('Custom', ascending=False)[:no_of_players].reset_index(drop=True)
+                df.drop('Custom', axis=1, inplace=True)
+
 
         league = ''
         nation = ''
         team = ''
         if (int(df['Comp'].nunique()) > 1) and (int(df['Squad'].nunique()) > 1):
-            title = '{0} vs {1} top {2} players across Europe\'s top 5 leagues\n for {3}{4}'.format(on_x, on_y,
-                                                                                                    str(no_of_players),
-                                                                                                    str(season),
-                                                                                                    p90statement)
+            title = '{0} vs {1} top {2} players across Europe\'s top 5 leagues for {3}{4}'.format(on_x, on_y,
+                                                                                                str(no_of_players),
+                                                                                                str(season),
+                                                                                                p90statement)
             if int(df['Nation'].nunique()) == 1:
                 nation += df['Nation'].iloc[0] + ' nationality'
-                title = '{0} vs {1} top {2} players across Europe\'s top 5 leagues of {3} \n for {4}{5}'.format(on_x,
-                                                                                                                on_y,
-                                                                                                                str(
-                                                                                                                    no_of_players),
-                                                                                                                nation,
-                                                                                                                str(
-                                                                                                                    season),
-                                                                                                                p90statement)
+                title = '{0} vs {1} top {2} players across Europe\'s top 5 leagues of {3} for {4}{5}'.format(on_x, on_y,
+                                                                                                            str(no_of_players), nation,
+                                                                                                            str(season),p90statement)
         else:
             if int(df['Comp'].nunique()) == 1:
                 league += df['Comp'].iloc[0]
@@ -159,8 +169,8 @@ class DataInput:
             if int(df['Nation'].nunique()) == 1:
                 nation += df['Nation'].iloc[0] + ' nationality'
 
-            title_dict = {'League': league, 'Team': team, 'Nation': nation}
-            title_lst = list(title_dict.values())
+            # title_dict = {'League': league, 'Team': team, 'Nation': nation}
+            title_lst = [league, team, nation]
             title_lst = [name for name in title_lst if len(name) > 0]
 
             if len(title_lst) == 1:
@@ -168,40 +178,62 @@ class DataInput:
             else:
                 title_st = ' and of '.join(title_lst)
 
-            title = '{0} vs {1} top {2} players in {3}\n for {4}{5}'.format(on_x, on_y, str(no_of_players), title_st,
+            title = '{0} vs {1} top {2} players in {3} for {4}{5}'.format(on_x, on_y, str(no_of_players), title_st,
                                                                             season, p90statement)
-        x_axis = on_x + p90statement
-        y_axis = on_y + p90statement
+       
 
         if custom_headers:
             title = input('Title header: ')
             x_axis = input('X axis title: ')
             y_axis = input('Y axis title: ')
 
-        plt.figure(figsize=figure_size)
-        plt.style.use('ggplot')
+        fig, ax = plt.subplots(figsize=figure_size)
+        ax.patch.set_facecolor(bgcolor)
+        fig.set_facecolor(bgcolor)
 
-        dist = (df[on_x].max() - df[on_x].min()) / 100
-        size = [8 if per90 else 10][0]
+        x_dist = (df[on_x].max() - df[on_x].min()) / 50
+        y_dist = (df[on_y].max() - df[on_y].min()) / 50
+        size = 12
 
-        p = sns.scatterplot(x=on_x, y=y_axis, data=df,
-                            hue=change_hue, legend=show_legend)
+        # SCATTERPLOT
+        alpha = 0.75 if len(df.index)<30 else 0.375
+        p = sns.scatterplot(x=on_x, y=on_y, data=df, color=point_col, edgecolor='black', alpha=alpha)
+        p.grid(True, axis='both', c='gray', ls='--', alpha=0.5)
 
-        if not repel:
-            for line in range(df.shape[0]):
-                plt.text(df[on_x][line] + dist, df[on_y][line],
-                         df['Player'][line],
-                         fontdict=dict(color='black', size=size))
+
+        # TEXT ANNOTATIONS
+        if annotate:
+            if not repel:
+                for line in range(df.shape[0]):
+                    plt.text(df[on_x][line] - x_dist, df[on_y][line] + y_dist,
+                             df['Player'][line],
+                             fontdict=dict(color=text_col, size=size))
+            else:
+                texts = []
+                for x, y, s in zip(df[on_x], df[on_y], df['Player']):
+                    texts.append(plt.text(x, y, s,
+                                          fontdict=dict(color=text_col, size=size)))
+                adjust_text(texts, force_points=0.2, force_text=0.2,
+                            expand_points=(1, 1), expand_text=(1, 1),
+                            arrowprops=dict(arrowstyle="-", color='white', lw=0.5,alpha=0))
+        
         else:
-            texts = []
-            for x, y, s in zip(np.array(df[on_x]), df[on_y], df['Player']):
-                texts.append(plt.text(x, y, s,
-                                      fontdict=dict(color='black', size=size)))
-            adjust_text(texts, force_points=0.2, force_text=0.2,
-                        expand_points=(1, 1), expand_text=(1, 1),
-                        arrowprops=dict(arrowstyle="-", color='white', lw=0.5))
-        p.set(xlabel=x_axis, ylabel=y_axis)
-        plt.title(title)
+            if player_focus:
+                df_player = df[df['Player']==player_focus]
+                try:
+                    ax.scatter(df_player[on_x], df_player[on_y], s=50, c='black', ec='black', zorder=2, alpha=0.8)
+                    ax.text(df_player[on_x] - x_dist, df_player[on_y] + y_dist, df_player['Player'].values[0], size=14)
+                except: pass
+
+        # FOOTER
+        fig.text(0.01,0.015, 'Made using FootballFbrefPlotting by Shreyas Khatri/@khatri_shreyas. '+
+        'Code repo present at https://github.com/shreyas7kha/FootballFbrefPlotting.', 
+        size=10, weight='bold')
+
+        # SET TITLES AND AXES LABELS
+        p.set_xlabel(x_axis, weight='heavy', family='Century Gothic', size=15, color=text_col)
+        p.set_ylabel(y_axis, weight='heavy', family='Century Gothic', size=15, color=text_col)
+        p.set_title(title.upper(), weight='heavy', family='Century Gothic', size=20, color=text_col)
 
         if add_xref:
             p.axvline(add_xref, ls='--')
@@ -234,7 +266,7 @@ class DataInput:
                 file_path = file_path + '\\' + sub_dir
 
             try:
-                plt.savefig(file_path + '\\' + filename + '.png', dpi=300)
+                plt.savefig(file_path + '\\' + filename + '.png', facecolor=bgcolor ,dpi=300)
             except:
                 print('An error occurred in saving the plot')
             else:
@@ -248,7 +280,19 @@ class DataInput:
 
 # A preliminary function which combines both dfs and cleans the dataframe
 def combine_and_cleancolumns(d1, d2):
-    data = pd.merge(d1, d2, on='Player')
+    data = pd.merge(d1, d2, on=['Player','Squad'])
+    columns = data.columns
+    new_cols = []
+
+    for col in columns:
+        if (col[-2:] != '_x') and (col[-2:]!='_y'):
+            new_cols.append(col)
+        else:
+            if col[:-2] not in new_cols:
+                new_cols.append(col[:-2])
+            else:
+                data.drop(col, inplace=True, axis=1)
+    data.columns = new_cols
     try:
         data['Player'] = data['Player'].apply(lambda x: ' '.join(x.split('\\')[1].split('-')))
         data['Comp'] = data['Comp'].apply(lambda x: ' '.join(x.split()[1:]))
@@ -272,11 +316,16 @@ class TwoDataInput(DataInput):
 # A function which can read data from a Fbref webpage
 def readfromhtml(filepath):
     df = pd.read_html(filepath)[0]
+    
     column_lst = list(df.columns)
-    for index in range(len(column_lst)):
-        column_lst[index] = column_lst[index][1]
+    unique_col_names = []
+    for col in column_lst:
+        if col[1] not in unique_col_names:
+            unique_col_names.append(col[1])
+        else:
+            unique_col_names.append(col[0]+' '+col[1])
 
-    df.columns = column_lst
+    df.columns = unique_col_names
     df.drop(df[df['Player'] == 'Player'].index, inplace=True)
     df = df.fillna('0')
     df.set_index('Rk', drop=True, inplace=True)
@@ -310,10 +359,11 @@ class TwoDataInputFromWebpage(DataInput):
 
 from bs4 import BeautifulSoup as soup
 
+
 # If you want all data for the big 5 leagues, you just need to run this function with
 # the filepath where you want to save all the files
-def save_all_csvs(filepath=os.getcwd()):
-    base_url = 'https://fbref.com/en/comps/Big5/Big-5-European-Leagues-Stats'
+def save_all_csvs(base_url='https://fbref.com/en/comps/Big5/Big-5-European-Leagues-Stats',
+                  filepath=os.getcwd()):
     req = requests.get(base_url)
     parse_soup = soup(req.content, 'lxml')
     scripts = parse_soup.find_all('ul')
