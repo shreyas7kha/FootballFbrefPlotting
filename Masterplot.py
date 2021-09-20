@@ -111,14 +111,16 @@ class DataInput:
     # plot_on_page plots the graph(default in Jupyter Notebook)
     # custom_headers lets you make custom labels for x, y axes and title
     # size is the figure size(input as a tuple, first refers to x width, second to y width)
+    # point_col, text_col and bg_color refer to the colour of the points, the text and background respectively
+    # annotate tells whether you want to label all points or not
+    # player_focus labels a particular player you want to focus on in the filtered dataframe, for this annotate has to be off
     # save saves the plot in a directory of your choice
     # add_xref, add_yred and add_refline adds reference lines according to slope needed
     # repel creates a ggrepel type feature which repels each label
     # Above code taken from https://github.com/Phlya/adjustText
     def plot(self, on_x, on_y, per90=False, no_of_players=False, season='20-21', plot_on_page=True,
              custom_headers=False, figure_size=(12, 8), point_col='red', text_col='black',
-             annotate = True, player_focus = None,
-             bgcolor='white', save=False, add_xref=False,
+             bgcolor='white', annotate = True, player_focus = None, save=False, add_xref=False,
              add_yref=False, add_refline=False, repel=True):
 
         df = self.filtereddf.copy().reset_index(drop=True)
